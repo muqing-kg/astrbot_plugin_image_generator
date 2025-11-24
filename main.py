@@ -528,10 +528,10 @@ class BananaPlugin(Star):
 
         if img_bytes_list:
             yield event.plain_result(
-                f"🎨 收到 {len(img_bytes_list)} 张图片，正在生成 [{actual_mode}] ..."
+                f"🎨 收到 {len(img_bytes_list)} 张图片，正在进行 [{actual_mode}] ..."
             )
         else:
-            yield event.plain_result(f"🎨 收到指令，正在生成 [{actual_mode}] ...")
+            yield event.plain_result(f"🎨 收到指令，正在进行 [{actual_mode}] ...")
 
         start_time = datetime.now()
         res = await self._call_api_with_retry(img_bytes_list, user_prompt)
