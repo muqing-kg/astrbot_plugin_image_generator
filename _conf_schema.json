@@ -1,0 +1,93 @@
+{
+    "api_url": {
+        "description": "【必需】生图 API 的请求地址",
+        "type": "string",
+        "hint": "这是提供AI绘画服务的核心接口地址。默认已填入柏图AI的地址。",
+        "default": "https://api.bltcy.ai/v1/chat/completions"
+    },
+    "model_name": {
+        "description": "【必需】使用的模型名称",
+        "type": "string",
+        "hint": "指定要使用的AI模型名称，根据所选API提供商支持的模型填写。",
+        "default": "gemini-2.5-flash-image"
+    },
+    "api_keys": {
+        "description": "【必需】生图 API 密钥列表",
+        "type": "list",
+        "hint": "您的API密钥。可以填写多个，插件会在请求失败时自动轮换。",
+        "items": { "type": "string", "description": "API 密钥" },
+        "default": []
+    },
+    "prefix": {
+        "description": "【重要】指令必须使用前缀 (如 /)",
+        "type": "bool",
+        "hint": "强烈建议开启！可以有效避免在日常聊天中误触绘画指令。",
+        "default": true
+    },
+    "use_proxy": {
+        "description": "启用网络代理",
+        "type": "bool",
+        "hint": "如果您的服务器无法直接连接到API地址，请务必开启此项。",
+        "default": false
+    },
+    "proxy_url": {
+        "description": "网络代理地址",
+        "type": "string",
+        "hint": "仅在“启用网络代理”开启时生效。格式: http://user:pass@host:port",
+        "default": ""
+    },
+    "user_whitelist": {
+        "description": "【权限】用户白名单 (QQ号)",
+        "type": "list",
+        "hint": "留空则对所有用户开放。填写后，只有列表中的用户才能使用本插件（机器人主人除外）。",
+        "items": { "type": "string", "description": "用户QQ号" },
+        "default": []
+    },
+    "user_blacklist": {
+        "description": "【权限】用户黑名单 (QQ号)",
+        "type": "list",
+        "hint": "黑名单优先级最高。列表中的用户将无法使用本插件（机器人主人除外）。",
+        "items": { "type": "string", "description": "用户QQ号" },
+        "default": []
+    },
+    "group_whitelist": {
+        "description": "【权限】群聊白名单 (群号)",
+        "type": "list",
+        "hint": "留空则在所有群聊中可用。填写后，插件只会在列表中的群聊生效。",
+        "items": { "type": "string", "description": "群号" },
+        "default": []
+    },
+    "group_blacklist": {
+        "description": "【权限】群聊黑名单 (群号)",
+        "type": "list",
+        "hint": "黑名单优先级最高。插件将不会在列表中的群聊生效。",
+        "items": { "type": "string", "description": "群号" },
+        "default": []
+    },
+    "enable_user_limit": {
+        "description": "【次数限制】启用【个人】次数限制",
+        "type": "bool",
+        "hint": "为每个非管理员用户独立计算和限制使用次数。",
+        "default": true
+    },
+    "enable_group_limit": {
+        "description": "【次数限制】启用【群组】次数限制",
+        "type": "bool",
+        "hint": "为每个群聊设置一个共享的使用次数池。当群聊次数存在时，会优先消耗群聊次数。",
+        "default": false
+    },
+    "help_text": {
+        "description": "【自定义】帮助信息内容",
+        "type": "text",
+        "editor_mode": true,
+        "editor_language": "markdown",
+        "hint": "自定义 `/生图帮助` 指令所展示的内容。使用 # ## * --- 进行排版。",
+        "default": "# 智能AI绘图助手\n\n## 智能指令 [推荐]\n* /生图 <提示词> [图片]\n* 说明: 自动判断文生图/图生图模式。\n\n---\n\n## 通用指令\n* /生图帮助 - 显示此帮助图\n* /生图查询次数 - 查询个人和群聊的剩余次数\n\n## 管理指令 (仅主人)\n* /生图添加key <key1> ...\n* /生图key列表\n* /生图删除key <序号|all>\n* /生图增加用户次数 <QQ号> <数量>\n* /生图增加群组次数 <群号> <数量>\n\n## 配置选项\n* save_images_locally: 是否保存生成的图片到本地，默认为关闭，开启后图片将保存到插件数据目录"
+    },
+    "save_images_locally": {
+        "description": "【可选】保存生成的图片到本地",
+        "type": "bool",
+        "hint": "开启后，生成的图片将保存到本地；关闭后，发送给用户后会自动删除。",
+        "default": false
+    }
+}
