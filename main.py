@@ -15,7 +15,6 @@ from astrbot.core import AstrBotConfig
 from astrbot.core.message.components import At, Image, Plain, Reply
 from astrbot.core.platform.astr_message_event import AstrMessageEvent
 from PIL import Image as PILImage
-from PIL import ImageDraw, ImageFont
 
 
 @register(
@@ -119,21 +118,11 @@ class BananaPlugin(Star):
         self.key_index = 0
         self.key_lock = asyncio.Lock()
         self.iwf: Optional[BananaPlugin.ImageWorkflow] = None
-        self.font_path = Path(__file__).parent / "resources" / "font.ttf"
-        self.fonts = {}
+        
 
     async def initialize(self):
 
-        if self.font_path.exists():
-            try:
-                self.fonts["title"] = ImageFont.truetype(str(self.font_path), 52)
-                self.fonts["header"] = ImageFont.truetype(str(self.font_path), 34)
-                self.fonts["body"] = ImageFont.truetype(str(self.font_path), 26)
-                logger.info(f"帮助图片字体已加载: {self.font_path}")
-            except Exception as e:
-                logger.warning(f"加载字体失败，帮助信息将以文本发送: {e}")
-        else:
-            logger.warning(f"字体文件未找到: {self.font_path}。帮助信息将以文本发送。")
+        
 
         proxy_url = (
             self.conf.get("proxy_url") if self.conf.get("use_proxy", False) else None
@@ -158,136 +147,7 @@ class BananaPlugin(Star):
     def is_global_admin(self, event: AstrMessageEvent) -> bool:
         return event.get_sender_id() in self.context.get_config().get("admins_id", [])
 
-    def _render_text_to_image_sync(self, text: str) -> bytes | None:
-        if not self.fonts:
-            return None
-
-        PADDING = 60
-        TITLE_SPACING = 40
-        SECTION_SPACING = 25
-        LINE_SPACING = 18
-        BG_COLOR = (240, 240, 245)
-        TITLE_COLOR = (20, 20, 20)
-        HEADER_COLOR = (58, 77, 143)
-        BODY_COLOR = (51, 51, 51)
-        LINE_COLOR = (220, 220, 225)
-
-        lines = text.strip().split("\n")
-
-        content_blocks = []
-        max_width = 0
-        for line in lines:
-            line = line.strip()
-            font, content = None, ""
-            if line.startswith("# "):
-                font, content = self.fonts["title"], line[2:]
-            elif line.startswith("## "):
-                font, content = self.fonts["header"], line[3:]
-            elif line.startswith("* "):
-                font, content = self.fonts["body"], line[2:]
-            elif line.startswith("---"):
-                font, content = None, "---"
-            elif line:
-                font, content = self.fonts["body"], line
-
-            if font:
-                width = font.getbbox(content)[2]
-                if line.startswith("* "):
-                    width += 40
-                if width > max_width:
-                    max_width = width
-            content_blocks.append(
-                {
-                    "type": line[:3] if line else "empty",
-                    "content": content,
-                    "font": font,
-                }
-            )
-
-        total_height = PADDING
-        for block in content_blocks:
-            if block["type"] == "#  ":
-                total_height += (
-                    block["font"].getbbox(block["content"])[3] + TITLE_SPACING
-                )
-            elif block["type"] == "## ":
-                total_height += (
-                    block["font"].getbbox(block["content"])[3] + SECTION_SPACING
-                )
-            elif block["type"] == "*  ":
-                total_height += (
-                    block["font"].getbbox(block["content"])[3] + LINE_SPACING
-                )
-            elif block["type"] == "---":
-                total_height += 30
-            elif block["type"] == "empty":
-                total_height += LINE_SPACING
-            else:
-                total_height += (
-                    block["font"].getbbox(block["content"])[3] + LINE_SPACING
-                )
-        total_height += PADDING - LINE_SPACING
-
-        img_width = max_width + PADDING * 2
-        image = PILImage.new("RGB", (img_width, total_height), BG_COLOR)
-        draw = ImageDraw.Draw(image)
-
-        y = PADDING
-        for block in content_blocks:
-            if block["type"] == "#  ":
-                draw.text(
-                    (PADDING, y), block["content"], font=block["font"], fill=TITLE_COLOR
-                )
-                y += block["font"].getbbox(block["content"])[3] + TITLE_SPACING
-            elif block["type"] == "## ":
-                draw.text(
-                    (PADDING, y),
-                    block["content"],
-                    font=block["font"],
-                    fill=HEADER_COLOR,
-                )
-                y += block["font"].getbbox(block["content"])[3] + SECTION_SPACING
-            elif block["type"] == "*  ":
-                text_height = (
-                    block["font"].getbbox(block["content"])[3]
-                    - block["font"].getbbox(block["content"])[1]
-                )
-                bullet_radius = 4
-                bullet_y = y + text_height / 2
-                draw.ellipse(
-                    (
-                        PADDING,
-                        bullet_y - bullet_radius,
-                        PADDING + bullet_radius * 2,
-                        bullet_y + bullet_radius,
-                    ),
-                    fill=HEADER_COLOR,
-                )
-                draw.text(
-                    (PADDING + 40, y),
-                    block["content"],
-                    font=block["font"],
-                    fill=BODY_COLOR,
-                )
-                y += text_height + LINE_SPACING
-            elif block["type"] == "---":
-                draw.line(
-                    [(PADDING, y + 10), (img_width - PADDING, y + 10)],
-                    fill=LINE_COLOR,
-                    width=2,
-                )
-                y += 30
-            elif block["type"] == "empty":
-                y += LINE_SPACING
-            else:
-                draw.text(
-                    (PADDING, y), block["content"], font=block["font"], fill=BODY_COLOR
-                )
-                y += block["font"].getbbox(block["content"])[3] + LINE_SPACING
-
-        buffer = io.BytesIO()
-        image.save(buffer, format="PNG")
-        return buffer.getvalue()
+    
 
     async def _load_user_counts(self):
         if not self.user_counts_file.exists():
@@ -485,14 +345,7 @@ class BananaPlugin(Star):
     ):
         if mode == "生图帮助":
             help_text = self.conf.get("help_text", "帮助信息未配置。")
-            loop = asyncio.get_running_loop()
-            image_bytes = await loop.run_in_executor(
-                None, self._render_text_to_image_sync, help_text
-            )
-            if image_bytes:
-                yield event.chain_result([Image.fromBytes(image_bytes)])
-            else:
-                yield event.plain_result(help_text)
+            yield event.plain_result(help_text)
             return
 
         user_prompt = event.message_str.strip()
