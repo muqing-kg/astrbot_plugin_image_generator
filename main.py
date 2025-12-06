@@ -621,6 +621,55 @@ class BananaPlugin(Star):
             pass
         return None
 
+    async def _consume_sse_and_extract_image(self, resp: aiohttp.ClientResponse) -> bytes | str:
+        content_text = ""
+        image_url: Optional[str] = None
+        while True:
+            line = await resp.content.readline()
+            if not line:
+                break
+            s = line.decode("utf-8", errors="ignore").strip()
+            if not s:
+                continue
+            if s.startswith(":"):
+                continue
+            if s.startswith("data:"):
+                payload = s[5:].strip()
+                if payload == "[DONE]":
+                    break
+                try:
+                    obj = json.loads(payload)
+                    if not image_url:
+                        image_url = self._extract_image_url_from_response(obj)
+                    if not image_url:
+                        choices = obj.get("choices") or []
+                        choice = choices[0] if choices else {}
+                        delta = choice.get("delta") or {}
+                        message = choice.get("message") or {}
+                        if "content" in delta:
+                            content_text += str(delta.get("content") or "")
+                        elif "content" in message:
+                            content_text += str(message.get("content") or "")
+                except Exception:
+                    m = re.search(r'https?://[^\s<>")\]]+', payload)
+                    if m:
+                        image_url = m.group(0).rstrip(")>,'\"")
+                        break
+            if image_url:
+                break
+        if not image_url and content_text:
+            fake = {"choices": [{"message": {"content": content_text}}]}
+            image_url = self._extract_image_url_from_response(fake)
+        if not image_url:
+            raise Exception("SSE响应未找到图片数据")
+        if image_url.startswith("data:image/"):
+            return base64.b64decode(image_url.split(",", 1)[1])
+        if self.iwf:
+            downloaded = await self.iwf._download_image(image_url)
+            if downloaded:
+                return downloaded
+        raise Exception("下载生成的图片失败")
+
     async def _call_api_with_retry(
         self, image_bytes_list: List[bytes], prompt: str
     ) -> bytes | str:
@@ -666,6 +715,7 @@ class BananaPlugin(Star):
 
         headers = {
             "Content-Type": "application/json",
+            "Accept": "application/json",
         }
 
         if api_key:
@@ -731,10 +781,15 @@ class BananaPlugin(Star):
                     else:
                         raise Exception(f"[错误码: {status}] {reason}")
                 
+                ct = resp.headers.get("Content-Type", "")
+                if "text/event-stream" in ct:
+                    return await self._consume_sse_and_extract_image(resp)
                 try:
                     data = await resp.json()
-                except json.JSONDecodeError:
+                except (json.JSONDecodeError, aiohttp.ContentTypeError):
                     raw_content = await resp.text()
+                    if raw_content.startswith("data:"):
+                        return await self._consume_sse_and_extract_image(resp)
                     logger.error(f"API返回的不是有效的JSON: {raw_content[:200]}...")
                     raise Exception("[数据解析错误] API返回格式错误")
 
