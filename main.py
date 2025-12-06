@@ -22,7 +22,7 @@ from PIL import ImageDraw, ImageFont
     "astrbot_plugin_image_generator",
     "沐沐沐倾",
     "智能AI绘图助手，一款功能强大的AI绘图插件，支持多种API提供商（包括但不限于柏图API、NewAPI、自搭建API等），集成了智能统一指令、及后台管理功能。",
-    "1.1.0",
+    "1.1.1",
 )
 class BananaPlugin(Star):
     class ImageWorkflow:
