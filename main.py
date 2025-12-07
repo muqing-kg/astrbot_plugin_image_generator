@@ -24,6 +24,22 @@ from PIL import Image as PILImage
     "1.1.2",
 )
 class BananaPlugin(Star):
+    def _get_help_text(self) -> str:
+        return (
+            "智能AI绘图助手 · 帮助\n\n"
+            "【智能指令】\n"
+            "• /生图 <提示词> [图片]\n"
+            "  自动判断文生图/图生图模式\n\n"
+            "【通用指令】\n"
+            "• /生图帮助\n"
+            "• /生图查询次数\n\n"
+            "【管理指令（管理员）】\n"
+            "• /生图添加key <key1 ...>\n"
+            "• /生图key列表\n"
+            "• /生图删除key <序号|all>\n"
+            "• /生图增加用户次数 <QQ号> <数量>\n"
+            "• /生图增加群组次数 <群号> <数量>"
+        )
     class ImageWorkflow:
         def __init__(self, proxy_url: str | None = None):
             if proxy_url:
@@ -344,8 +360,7 @@ class BananaPlugin(Star):
         pre_fetched_images: Optional[List[bytes]] = None,
     ):
         if mode == "生图帮助":
-            help_text = self.conf.get("help_text", "帮助信息未配置。")
-            yield event.plain_result(help_text)
+            yield event.plain_result(self._get_help_text())
             return
 
         user_prompt = event.message_str.strip()

@@ -76,14 +76,7 @@
         "hint": "为每个群聊设置一个共享的使用次数池。当群聊次数存在时，会优先消耗群聊次数。",
         "default": false
     },
-    "help_text": {
-        "description": "【自定义】帮助信息内容",
-        "type": "text",
-        "editor_mode": true,
-        "editor_language": "plain",
-        "hint": "自定义 `/生图帮助` 的文本内容。",
-        "default": "智能AI绘图助手\n\n智能指令 [推荐]\n/生图 <提示词> [图片]\n说明: 自动判断文生图/图生图模式。\n\n通用指令\n/生图帮助 - 显示帮助文本\n/生图查询次数 - 查询个人和群聊的剩余次数\n\n管理指令 (仅主人)\n/生图添加key <key1> ...\n/生图key列表\n/生图删除key <序号|all>\n/生图增加用户次数 <QQ号> <数量>\n/生图增加群组次数 <群号> <数量>\n\n配置选项\nsave_images_locally: 是否保存生成的图片到本地，默认为关闭，开启后图片将保存到插件数据目录"
-    },
+    
     "save_images_locally": {
         "description": "【可选】保存生成的图片到本地",
         "type": "bool",
