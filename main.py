@@ -21,7 +21,7 @@ from PIL import Image as PILImage
     "astrbot_plugin_image_generator",
     "沐沐沐倾",
     "智能AI绘图助手，一款功能强大的AI绘图插件，支持多种API提供商（包括但不限于柏图API、NewAPI、自搭建API等），集成了智能统一指令、及后台管理功能。",
-    "1.1.1",
+    "1.1.2",
 )
 class BananaPlugin(Star):
     class ImageWorkflow:
@@ -416,17 +416,20 @@ class BananaPlugin(Star):
                     logger.error(f"保存图片到本地失败: {e}")
                     image_path = None
 
-            caption_parts = [f"✅ 生成成功 ({elapsed:.2f}s)", f"模式: {actual_mode}"]
-            if is_master:
-                caption_parts.append("剩余: ∞")
+            user_limit_on = self.conf.get("enable_user_limit", True)
+            group_limit_on = self.conf.get("enable_group_limit", False) and group_id
+            if not user_limit_on and not group_limit_on:
+                yield event.chain_result([Image.fromBytes(res)])
             else:
-                if self.conf.get("enable_user_limit", True):
-                    caption_parts.append(f"个人剩余: {self._get_user_count(sender_id)}")
-                if self.conf.get("enable_group_limit", False) and group_id:
-                    caption_parts.append(f"本群剩余: {self._get_group_count(group_id)}")
-
-            image_chain = [Image.fromBytes(res), Plain(" | ".join(caption_parts))]
-            yield event.chain_result(image_chain)
+                caption_parts = [f"✅ 生成成功 ({elapsed:.2f}s)", f"模式: {actual_mode}"]
+                if is_master:
+                    caption_parts.append("剩余: ∞")
+                else:
+                    if user_limit_on:
+                        caption_parts.append(f"个人剩余: {self._get_user_count(sender_id)}")
+                    if group_limit_on:
+                        caption_parts.append(f"本群剩余: {self._get_group_count(group_id)}")
+                yield event.chain_result([Image.fromBytes(res), Plain(" | ".join(caption_parts))])
 
             if (
                 not self.conf.get("save_images_locally", False)
