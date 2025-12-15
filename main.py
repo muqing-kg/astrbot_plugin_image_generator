@@ -46,14 +46,15 @@ class BananaPlugin(Star):
                 logger.info(f"ImageWorkflow 使用代理: {proxy_url}")
             self.session = aiohttp.ClientSession()
             self.proxy = proxy_url
+            self.extra_headers: Dict[str, str] = {}
 
-        async def _download_image(self, url: str) -> bytes | None:
+        async def _download_image(self, url: str, headers: Optional[Dict[str, str]] = None) -> bytes | None:
             try:
-                async with self.session.get(url, proxy=self.proxy, timeout=30) as resp:
+                async with self.session.get(url, proxy=self.proxy, timeout=30, headers=(headers or self.extra_headers or None)) as resp:
                     resp.raise_for_status()
                     return await resp.read()
             except Exception as e:
-                logger.error(f"图片下载失败: {e}")
+                logger.error(f"图片下载失败: {e} | url={url}")
                 return None
 
         def _extract_first_frame_sync(self, raw: bytes) -> bytes:
@@ -533,10 +534,11 @@ class BananaPlugin(Star):
             image_url = self._extract_image_url_from_response(fake)
         if not image_url:
             raise Exception("SSE响应未找到图片数据")
+        logger.info(f"🔗 图片链接: {image_url}")
         if image_url.startswith("data:image/"):
             return base64.b64decode(image_url.split(",", 1)[1])
         if self.iwf:
-            downloaded = await self.iwf._download_image(image_url)
+            downloaded = await self.iwf._download_image(image_url, self.iwf.extra_headers or None)
             if downloaded:
                 return downloaded
         raise Exception("下载生成的图片失败")
@@ -609,7 +611,7 @@ class BananaPlugin(Star):
         payload = {
             "model": model_name,
             "max_tokens": 1500,
-            "stream": False,
+            "stream": bool(self.conf.get("use_stream", False)),
             "messages": [{"role": "user", "content": content_list}],
         }
 
@@ -672,10 +674,16 @@ class BananaPlugin(Star):
                 if not (gen_image_url := self._extract_image_url_from_response(data)):
                     raise Exception(f"API响应中未找到图片数据: {str(data)[:500]}...")
 
+                logger.info(f"🔗 图片链接: {gen_image_url}")
                 if gen_image_url.startswith("data:image/"):
                     return base64.b64decode(gen_image_url.split(",", 1)[1])
 
-                if downloaded_image := await self.iwf._download_image(gen_image_url):
+                download_headers = {}
+                auth_val = headers.get("Authorization")
+                if auth_val:
+                    download_headers["Authorization"] = auth_val
+                self.iwf.extra_headers = download_headers
+                if downloaded_image := await self.iwf._download_image(gen_image_url, download_headers or None):
                     return downloaded_image
 
                 raise Exception("下载生成的图片失败")
