@@ -476,6 +476,16 @@ class BananaPlugin(Star):
         logger.info(f"API密钥已切换至索引: {self.key_index}")
 
     def _extract_image_url_from_response(self, data: Dict[str, Any]) -> str | None:
+        """
+        全面的图片提取器，支持市面上常见的各种 API 返回格式：
+        - OpenAI ChatGPT/DALL-E 格式
+        - Stability AI 格式
+        - Gemini/Claude 格式
+        - 国内各类兼容 API 格式
+        - Markdown 内嵌图片格式
+        """
+        
+        # ========== 1. OpenAI ChatCompletion 扩展格式 (带 images 字段) ==========
         try:
             return data["choices"][0]["message"]["images"][0]["image_url"]["url"]
         except (IndexError, TypeError, KeyError):
@@ -484,13 +494,158 @@ class BananaPlugin(Star):
             return data["choices"][0]["message"]["images"][0]["url"]
         except (IndexError, TypeError, KeyError):
             pass
+        
+        # ========== 2. OpenAI DALL-E / Images API 格式 ==========
+        # 格式: {"data": [{"url": "..."} 或 {"b64_json": "..."}]}
         try:
-            if url_match := re.search(
-                r'https?://[^\s<>")\]]+', data["choices"][0]["message"]["content"]
-            ):
-                return url_match.group(0).rstrip(")>,'\"")
+            item = data["data"][0]
+            if "url" in item:
+                return item["url"]
+            if "b64_json" in item:
+                return f"data:image/png;base64,{item['b64_json']}"
         except (IndexError, TypeError, KeyError):
             pass
+        
+        # ========== 3. Stability AI 格式 ==========
+        # 格式: {"artifacts": [{"base64": "...", "finishReason": "SUCCESS"}]}
+        try:
+            artifact = data["artifacts"][0]
+            if "base64" in artifact:
+                return f"data:image/png;base64,{artifact['base64']}"
+        except (IndexError, TypeError, KeyError):
+            pass
+        
+        # ========== 4. Google Gemini 原生格式 ==========
+        # 格式: {"candidates": [{"content": {"parts": [{"inlineData": {"mimeType": "...", "data": "..."}}]}}]}
+        try:
+            parts = data["candidates"][0]["content"]["parts"]
+            for part in parts:
+                if "inlineData" in part:
+                    inline = part["inlineData"]
+                    mime = inline.get("mimeType", "image/png")
+                    b64_data = inline.get("data", "")
+                    if b64_data:
+                        return f"data:{mime};base64,{b64_data}"
+        except (IndexError, TypeError, KeyError):
+            pass
+        
+        # ========== 5. Claude/Anthropic 格式 ==========
+        # 格式: {"content": [{"type": "image", "source": {"type": "base64", "media_type": "...", "data": "..."}}]}
+        try:
+            for block in data.get("content", []):
+                if block.get("type") == "image":
+                    source = block.get("source", {})
+                    if source.get("type") == "base64":
+                        mime = source.get("media_type", "image/png")
+                        b64_data = source.get("data", "")
+                        if b64_data:
+                            return f"data:{mime};base64,{b64_data}"
+        except (TypeError, KeyError):
+            pass
+        
+        # ========== 6. 通用兼容格式 - 顶层字段 ==========
+        # 部分国内 API 可能直接返回 {"url": "..."} 或 {"image": "..."} 等
+        for key in ["url", "image_url", "image", "imageUrl", "img_url", "imgUrl", "result"]:
+            try:
+                val = data.get(key)
+                if isinstance(val, str) and (val.startswith("http") or val.startswith("data:image/")):
+                    return val
+                # 可能是嵌套对象 {"url": {"url": "..."}}
+                if isinstance(val, dict):
+                    inner_url = val.get("url") or val.get("data")
+                    if isinstance(inner_url, str) and (inner_url.startswith("http") or inner_url.startswith("data:image/")):
+                        return inner_url
+            except (TypeError, KeyError):
+                pass
+        
+        # ========== 7. output/results 数组格式 ==========
+        # 格式: {"output": {"images": [...]}} 或 {"results": [{"url": "..."}]}
+        for container_key in ["output", "results", "images", "result"]:
+            try:
+                container = data.get(container_key)
+                if isinstance(container, dict):
+                    # {"output": {"images": [...]}}
+                    images = container.get("images") or container.get("data") or []
+                    if images and isinstance(images, list):
+                        item = images[0]
+                        if isinstance(item, str):
+                            return item
+                        if isinstance(item, dict):
+                            for k in ["url", "image", "b64", "base64", "data"]:
+                                if k in item:
+                                    val = item[k]
+                                    if k in ["b64", "base64", "data"] and not val.startswith("data:"):
+                                        return f"data:image/png;base64,{val}"
+                                    return val
+                elif isinstance(container, list) and container:
+                    item = container[0]
+                    if isinstance(item, str) and (item.startswith("http") or item.startswith("data:image/")):
+                        return item
+                    if isinstance(item, dict):
+                        for k in ["url", "image", "b64", "base64", "data", "image_url"]:
+                            if k in item:
+                                val = item[k]
+                                if isinstance(val, str):
+                                    if k in ["b64", "base64", "data"] and not val.startswith("data:"):
+                                        return f"data:image/png;base64,{val}"
+                                    return val
+            except (TypeError, KeyError, IndexError):
+                pass
+        
+        # ========== 8. ChatCompletion content 字段解析 ==========
+        content = None
+        # 尝试从 choices[0].message.content 获取
+        try:
+            content = data["choices"][0]["message"]["content"]
+        except (IndexError, TypeError, KeyError):
+            pass
+        
+        # 也尝试从 choices[0].delta.content 获取 (流式响应)
+        if not content:
+            try:
+                content = data["choices"][0]["delta"]["content"]
+            except (IndexError, TypeError, KeyError):
+                pass
+        
+        # 直接 content 字段
+        if not content:
+            content = data.get("content")
+            if isinstance(content, list):
+                # Claude 格式的 content 数组
+                for block in content:
+                    if isinstance(block, dict) and block.get("type") == "text":
+                        content = block.get("text", "")
+                        break
+                else:
+                    content = None
+        
+        if content and isinstance(content, str):
+            # 8.1 Markdown 图片格式: ![...](url)
+            md_match = re.search(r'!\[[^\]]*\]\(([^)]+)\)', content)
+            if md_match:
+                url = md_match.group(1)
+                if url.startswith("data:image/") or url.startswith("http"):
+                    return url
+            
+            # 8.2 独立的 data:image/ URL
+            data_url_match = re.search(r'data:image/[^;\s]+;base64,[A-Za-z0-9+/=]+', content)
+            if data_url_match:
+                return data_url_match.group(0)
+            
+            # 8.3 HTML <img> 标签
+            img_match = re.search(r'<img[^>]+src=["\']([^"\']+)["\']', content, re.IGNORECASE)
+            if img_match:
+                return img_match.group(1)
+            
+            # 8.4 独立的 HTTP URL (图片扩展名优先)
+            img_url_match = re.search(r'https?://[^\s<>")\]]+\.(?:png|jpg|jpeg|gif|webp|bmp)(?:\?[^\s<>")\]]*)?', content, re.IGNORECASE)
+            if img_url_match:
+                return img_url_match.group(0).rstrip(")>,'\"")
+            
+            # 8.5 任意 HTTP URL
+            if url_match := re.search(r'https?://[^\s<>")\]]+', content):
+                return url_match.group(0).rstrip(")>,'\"")
+        
         return None
 
     async def _consume_sse_and_extract_image(self, resp: aiohttp.ClientResponse) -> bytes | str:
